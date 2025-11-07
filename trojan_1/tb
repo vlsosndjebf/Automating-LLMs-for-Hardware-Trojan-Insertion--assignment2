@@ -1,0 +1,44 @@
+// --- Testbench Core: Trojan 1 (AES DoS) ---
+initial begin
+    bit success;
+    [31:0] read_data;
+
+    // TODO: You need to find the addresses for these registers from the OpenTitan documentation
+    localparam AES_CTRL_SHADOWED_ADDR = 32'h4011000C; 
+    localparam AES_START_REG          = 32'h40110010; 
+    localparam AES_STATUS_REG         = 32'h40110014; 
+
+    $display("--- Task 1 (AES DoS) Testbench Start ---");
+    
+    // Step 1: Verify normal functionality
+    $display("Step A: Verifying normal functionality...");
+    wb_write(AES_START_REG, 32'h1, success);
+    // (Wait for AES to complete... poll the status register)
+    wait (check_aes_done(AES_STATUS_REG));
+    $display("PASS: AES runs normally before trigger.");
+
+    // Step 2: Write the magic value to trigger the Trojan
+    $display("Step B: Writing magic value to trigger Trojan...");
+    wb_write(AES_CTRL_SHADOWED_ADDR, 32'hDEADBEEF, success);
+    if (success) $display("Trigger has been written.");
+
+    // Step 3: Try to run AES and confirm it times out
+    $display("Step C: Attempting to run AES (should trigger DoS)...");
+    wb_write(AES_START_REG, 32'h1, success);
+
+    // Start a polling process with a timeout
+    fork
+        // Process 1: Watchdog
+        begin
+            #(10000); // 10,000 cycle timeout
+            $display("PASS: AES did not respond. DoS Trojan confirmed!");
+            $finish;
+        end
+        // Process 2: Poll for completion
+        begin
+            wait (check_aes_done(AES_STATUS_REG));
+            $error("FAIL: AES responded! DoS Trojan failed.");
+            $finish;
+        end
+    join_any
+end
