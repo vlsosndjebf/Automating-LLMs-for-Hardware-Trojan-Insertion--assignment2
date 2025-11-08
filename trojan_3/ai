@@ -1,0 +1,20 @@
+Design: uart.sv
+Vulnerability ID: trojan_3_uart_func_change
+Model: gpt-4-turbo
+
+Explanation:
+The Trojan is inserted in the UART module and uses a state machine to permanently activate a debug feature when a specific byte sequence is detected on RX, which then corrupts all future TX data by inverting its parity bit.
+
+Trigger:
+The trigger of the Trojan is a finite state machine, which activates upon receiving the byte sequence `0xDEADBEEF` on the UART RX line and sets the corruption flag `corruption_active`.
+
+Payload:
+Once triggered, the payload changes the behavior of the UART, corrupting all transmitted TX data by inverting the parity bit permanently, keeping the flag `corruption_active` set.
+
+Taxonomy:
+- Insertion phase: Design
+- Abstraction level: Register-transfer level
+- Activation mechanism: Triggered internally
+- Effects: Functionality change
+- Location: I/O subsystem
+- Characteristics: Size (small), Type (Functional)
