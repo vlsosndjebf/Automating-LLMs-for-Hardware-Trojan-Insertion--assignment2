@@ -1,0 +1,20 @@
+Design: aes.sv
+Vulnerability ID: trojan_1_aes_leak
+Model: gpt-4-turbo
+
+Explanation:
+The Trojan is integrated by checking for a special data pattern on the 'tl_i.a_data' bus. When triggered, it sets a register, 'trojan_triggered', which then alters the cipher's output channel to leak the secret key directly, bypassing normal encryption.
+
+Trigger:
+The trigger is a specific data pattern detected on the input bus 'tl_i.a_data'. When this pattern, `128'hDEADBEEFCAFEBABEDEADBEEFCAFEBABE`, is matched, the trojan's payload mechanism is activated in the next cycle.
+
+Payload:
+The payload of this Trojan is an information leak. When triggered, instead of providing the normal encrypted output, it leaks the internal 'key_q' register's value, disclosing the secret key contents inadvertently.
+
+Taxonomy:
+- Insertion phase: Design
+- Abstraction level: Register-transfer level
+- Activation mechanism: Triggered internally
+- Effects: information leak
+- Location: Processor
+- Characteristics: Functional Trojan
