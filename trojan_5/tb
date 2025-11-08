@@ -1,0 +1,153 @@
+`timescale 1ns/1ps
+
+module testbench;
+
+   
+    localparam KMAC_CFG_ADDR       = 32'h0004; 
+    localparam KMAC_CMD_ADDR       = 32'h0008; 
+    localparam KMAC_MSG_FIFO_ADDR  = 32'h0800; 
+
+    localparam CMD_START   = 32'd29;
+    localparam CMD_PROCESS = 32'd46;
+
+
+    reg clk;
+    reg rst_n;
+    
+    reg        wb_cyc_i;
+    reg        wb_stb_i;
+    reg        wb_we_i;
+    reg [3:0]  wb_sel_i;
+    reg [31:0] wb_adr_i;
+    reg [31:0] wb_dat_i;
+    wire [31:0] wb_dat_o;
+    wire        wb_ack_o;
+
+    kmac_stub dut_kmac_core (
+        .clk_i(clk),
+        .rst_ni(rst_n),
+        
+        .wb_cyc_i(wb_cyc_i),
+        .wb_stb_i(wb_stb_i),
+        .wb_we_i(wb_we_i),
+        .wb_sel_i(wb_sel_i),
+        .wb_adr_i(wb_adr_i),
+        .wb_dat_i(wb_dat_i),
+        .wb_dat_o(wb_dat_o),
+        .wb_ack_o(wb_ack_o)
+    );
+
+   
+    initial begin
+        clk = 0;
+        forever #5 clk = ~clk; 
+    end
+
+    initial begin
+        rst_n = 0;
+        wb_cyc_i = 0;
+        wb_stb_i = 0;
+        wb_we_i = 0;
+        wb_sel_i = 0;
+        wb_adr_i = 0;
+        wb_dat_i = 0;
+        #20;
+        rst_n = 1;
+    end
+
+    task wb_write;
+        input [31:0] addr;
+        input [31:0] data;
+        
+        @(posedge clk);
+        wb_adr_i <= addr;
+        wb_dat_i <= data;
+        wb_we_i  <= 1;
+        wb_sel_i <= 4'b1111; 
+        wb_stb_i <= 1;
+        wb_cyc_i <= 1;
+        
+        @(posedge clk);
+        while (wb_ack_o == 0) begin
+            @(posedge clk);
+        end
+        
+        wb_stb_i <= 0;
+        wb_cyc_i <= 0;
+        wb_we_i  <= 0;
+        @(posedge clk);
+    endtask
+
+   
+    task kmac_start_operation;
+       
+        wb_write(KMAC_CFG_ADDR, 32'h01000001); 
+        
+        wb_write(KMAC_CMD_ADDR, CMD_START);
+        
+        wb_write(KMAC_MSG_FIFO_ADDR, 32'hDEADBEEF);
+        
+        wb_write(KMAC_CMD_ADDR, CMD_PROCESS);
+    endtask
+
+    
+    initial begin
+        $display("--- Task 5 (KMAC Weakening) Testbench Start ---");
+        
+        wait (rst_n == 1);
+        #10;
+
+        $display("Step A: Forcing trigger condition (5 pulses)...");
+        
+        force dut_kmac_core.entropy_ready = 1'b0;
+       
+        repeat (5) begin
+            @(posedge clk);
+            force dut_kmac_core.app_req = 1'b1;
+            @(posedge clk);
+            force dut_kmac_core.app_req = 1'b0;
+        end
+        
+        release dut_kmac_core.entropy_ready;
+        release dut_kmac_core.app_req;
+
+        $display("Step B: Checking internal 'trojan_active' flag...");
+        @(posedge clk);
+        
+        if (dut_kmac_core.trojan_active_internal_signal == 1'b1) begin
+            $display("PASS: Trojan flag is active!");
+        end else begin
+            $error("FAIL: Trojan flag is not active.");
+        end
+        
+
+        $display("Step C: Starting KMAC operation to check payload...");
+        
+        fork
+            
+            begin
+                kmac_start_operation();
+            end
+            
+           
+            begin
+                
+                wait (dut_kmac_core.processing_active == 1'b1);
+                $display("Step D: KMAC is processing. Monitoring entropy_mixer.source_select...");
+                
+                @(posedge clk);
+                
+               
+                if (dut_kmac_core.entropy_mixer.source_select == dut_kmac_core.WEAK_SOURCE) begin
+                    $display("PASS: Trojan payload active! Entropy source is weakened.");
+                end else begin
+                    $error("FAIL: Trojan payload FAILED. Entropy source was not weakened.");
+                end
+            end
+        join
+
+        #100;
+        $finish;
+    end
+
+endmodule
